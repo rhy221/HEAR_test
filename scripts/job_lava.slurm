@@ -169,7 +169,7 @@ fi
     --dtype float16 \
     --max-model-len 16384 \
     --max-num-batched-tokens 8192 \
-    --gpu-memory-utilization 0.85 \
+    --gpu-memory-utilization 0.42 \
     --enforce-eager \
     --limit-mm-per-prompt '{"image": 4}' \
     > "$VLLM_LOG" 2>&1 &
