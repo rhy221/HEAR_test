@@ -1,14 +1,24 @@
+import csv
 import json
 from pathlib import Path
 from typing import Any, List, Optional
 
 
 def load_questions(path: str, cfg_fields: Any) -> List[dict]:
+    path_obj = Path(path)
+    suffix = path_obj.suffix.lower()
+
+    if suffix == ".csv":
+        return _load_csv(path, cfg_fields)
+    else:
+        return _load_json(path, cfg_fields)
+
+
+def _load_json(path: str, cfg_fields: Any) -> List[dict]:
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
 
     if isinstance(data, dict):
-        # Handle {questions: [...]} wrapper
         data = data.get("questions", data.get("data", list(data.values())[0]))
 
     questions = []
@@ -21,6 +31,26 @@ def load_questions(path: str, cfg_fields: Any) -> List[dict]:
             "language": item.get(cfg_fields.language, item.get("language", None)),
         }
         questions.append(q)
+    return questions
+
+
+def _load_csv(path: str, cfg_fields: Any) -> List[dict]:
+    questions = []
+    with open(path, encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            pdf_fname = row.get(cfg_fields.pdf_filename, row.get("pdf", ""))
+            # Auto-add .pdf extension if missing (VD: "j_0027" → "j_0027.pdf")
+            if pdf_fname and not pdf_fname.lower().endswith(".pdf"):
+                pdf_fname = f"{pdf_fname}.pdf"
+            q = {
+                "id": row.get(cfg_fields.id, row.get("id", "")),
+                "question": row.get(cfg_fields.question, row.get("question", "")),
+                "pdf_filename": pdf_fname,
+                "answer_type": row.get(cfg_fields.answer_type, row.get("answer_type")) or None,
+                "language": row.get(cfg_fields.language, row.get("language")) or None,
+            }
+            questions.append(q)
     return questions
 
 

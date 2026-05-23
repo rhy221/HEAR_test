@@ -7,16 +7,16 @@
 
 # ── 1. DATA ──────────────────────────────────────────────────────────────────
 data:
-  test_questions: ${oc.env:LAVA_QUESTIONS,/datastore/${oc.env:USER,user}/LAVA2026_2/data/questions.json}
-  pdf_dir:        ${oc.env:LAVA_PDF_DIR,/datastore/${oc.env:USER,user}/LAVA2026_2/data/pdfs}
-  sample_submission: ${oc.env:LAVA_SAMPLE_SUB,/datastore/${oc.env:USER,user}/LAVA2026_2/data/sample_submission.csv}
+  test_questions: ${oc.env:LAVA_QUESTIONS,/datastore/cndt_khanhnd/LAVA2026_HEAR/lava26/lava-challenge-2026/test.csv}
+  pdf_dir:        ${oc.env:LAVA_PDF_DIR,/datastore/cndt_khanhnd/LAVA2026_HEAR/lava26/lava-challenge-2026/test_pdfs}
+  sample_submission: ${oc.env:LAVA_SAMPLE_SUB,/datastore/cndt_khanhnd/LAVA2026_HEAR/lava26/lava-challenge-2026/sample_submission.csv}
   sample: null
 
   fields:
     id:           id
     question:     question
-    pdf_filename: pdf
-    answer_type:  answer_type   # string | number | unordered_list | ordered_list
+    pdf_filename: file_id       # Cột file_id trong CSV → sẽ thêm .pdf extension
+    answer_type:  answer_format # Cột answer_format trong CSV
     language:     language      # ja | vi (optional, auto-detected if absent)
 
 # ── 2. PARSING (Stage 1) ─────────────────────────────────────────────────────
