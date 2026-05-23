@@ -10,8 +10,8 @@
 # Model: Qwen/Qwen2.5-VL-32B-Instruct-AWQ (awq_marlin, ~20GB VRAM on A100 40GB)
 
 #SBATCH --job-name=lava_2026
-#SBATCH --output=/datastore/%u/LAVA2026_2/lava26/runs/slurm-%j-early.out
-#SBATCH --error=/datastore/%u/LAVA2026_2/lava26/runs/slurm-%j-early.err
+#SBATCH --output=/datastore/%u/LAVA2026_HEAR/lava26/runs/slurm-%j-early.out
+#SBATCH --error=/datastore/%u/LAVA2026_HEAR/lava26/runs/slurm-%j-early.err
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
@@ -29,7 +29,7 @@ export LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64:${LD_LIBRARY_PATH:-}
 
 # ── 2. KHAI BÁO BIẾN ─────────────────────────────────────────────────────────
 REQUIRED_VRAM=40000
-PROJECT_DIR=/datastore/$USER/LAVA2026_2/lava26
+PROJECT_DIR=/datastore/$USER/LAVA2026_HEAR/lava26
 PYTHON=/datastore/$USER/miniconda3/envs/vqa-jv/bin/python
 VLLM=/datastore/$USER/miniconda3/envs/vqa-jv/bin/vllm
 MODEL_DIR=/datastore/$USER/models/Qwen2.5-VL-32B-Instruct-AWQ
