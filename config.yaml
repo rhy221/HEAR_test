@@ -1,0 +1,212 @@
+# =============================================================================
+# LAVA 2026 — HEAR-inspired Document VQA Pipeline
+# Config schema: OmegaConf (CLI override: `python run.py key.subkey=value`)
+# Hardware target: 1× A100 40GB VRAM, 2h inference budget
+# Model: Qwen/Qwen2.5-VL-32B-Instruct-AWQ (awq_marlin, ~20GB VRAM)
+# =============================================================================
+
+# ── 1. DATA ──────────────────────────────────────────────────────────────────
+data:
+  test_questions: ${oc.env:LAVA_QUESTIONS,/datastore/${oc.env:USER,user}/LAVA2026_2/data/questions.json}
+  pdf_dir:        ${oc.env:LAVA_PDF_DIR,/datastore/${oc.env:USER,user}/LAVA2026_2/data/pdfs}
+  sample_submission: ${oc.env:LAVA_SAMPLE_SUB,/datastore/${oc.env:USER,user}/LAVA2026_2/data/sample_submission.csv}
+  sample: null
+
+  fields:
+    id:           id
+    question:     question
+    pdf_filename: pdf
+    answer_type:  answer_type   # string | number | unordered_list | ordered_list
+    language:     language      # ja | vi (optional, auto-detected if absent)
+
+# ── 2. PARSING (Stage 1) ─────────────────────────────────────────────────────
+parsing:
+  dpi: 150
+  max_image_long_side: 1568
+
+  text_extractor: pymupdf
+
+  use_mineru: true
+  mineru_device: cuda
+  mineru_fallback_on_error: true
+
+  vlm_reconcile: true
+  reconcile_max_tokens: 4096
+  reconcile_temperature: 0.0
+
+  cross_page_table: true
+  cross_page_table_max_span: 5
+
+  cache_dir: ${oc.env:LAVA_CACHE_DIR,./cache}/parsed
+  force_reparse: false
+
+# ── 3. RETRIEVAL (Stage 2) ───────────────────────────────────────────────────
+retriever:
+  dense:
+    enabled: true
+    model: ${oc.env:DENSE_DIR,Alibaba-NLP/gte-multilingual-base}
+    max_length: 8192
+    batch_size: 16
+    device: cuda
+    cache_dir: ${oc.env:LAVA_CACHE_DIR,./cache}/dense_embs
+    normalize: true
+
+  sparse:
+    enabled: true
+    algorithm: bm25
+    bm25_k1: 1.5
+    bm25_b: 0.75
+    tokenizer: auto   # auto | mecab | pyvi | underthesea | whitespace
+    cache_dir: ${oc.env:LAVA_CACHE_DIR,./cache}/bm25
+
+  visual:
+    enabled: true
+    retriever_model: ${oc.env:COLQWEN_DIR,vidore/colqwen2.5-v0.2}
+    batch_size: 4
+    device: cuda
+    cache_dir: ${oc.env:LAVA_CACHE_DIR,./cache}/visual_embs
+    query_cache: ${oc.env:LAVA_CACHE_DIR,./cache}/query_embs.pt
+
+  fusion:
+    method: rrf
+    rrf_k: 60
+    adaptive_threshold_ratio: 0.8
+    top_k_cap: 2
+    min_k: 1
+
+# ── 4. AGENTS (Stage 3) ──────────────────────────────────────────────────────
+agents:
+  mode: shared_vlm   # shared_vlm | separate_text_model
+
+  enable_cross_verification: true
+  enable_conflict_reeval: true
+  max_reeval_rounds: 1
+
+  coordinator:
+    max_tokens: 1024
+    temperature: 0.0
+  textual:
+    max_tokens: 1024
+    temperature: 0.0
+  visual:
+    max_tokens: 1024
+    temperature: 0.0
+  synthesis:
+    max_tokens: 768
+    temperature: 0.0
+
+  per_question_timeout_s: 60
+
+# ── 5. MODELS ────────────────────────────────────────────────────────────────
+model:
+  qwen_vl:
+    path: ${oc.env:MODEL_DIR,/datastore/${oc.env:USER,user}/models/Qwen2.5-VL-32B-Instruct-AWQ}
+    hf_repo: Qwen/Qwen2.5-VL-32B-Instruct-AWQ
+    backend: vllm
+    vllm_url: http://localhost:${oc.env:VLLM_PORT,8000}/v1
+    vllm_api_key: EMPTY
+    mode: vlm
+    quantization: awq_marlin
+    dtype: float16
+    max_model_len: 16384
+    gpu_memory_utilization: 0.85
+    enforce_eager: true
+    max_num_batched_tokens: 8192
+    limit_mm_per_prompt:
+      image: 4
+    request_timeout_s: 120
+    max_retries: 2
+
+  qwen_text:
+    path: ${oc.env:QWEN_TEXT_DIR,/datastore/${oc.env:USER,user}/models/Qwen2.5-7B-Instruct}
+    hf_repo: Qwen/Qwen2.5-7B-Instruct
+    backend: vllm
+    vllm_url: http://localhost:${oc.env:VLLM_TEXT_PORT,8001}/v1
+    vllm_api_key: EMPTY
+    quantization: null
+    dtype: bfloat16
+    max_model_len: 16384
+    gpu_memory_utilization: 0.40
+    enforce_eager: true
+    request_timeout_s: 90
+
+  swap_policy:
+    strategy: sequential
+    unload_between_phases: true
+
+# ── 6. PROMPTS ───────────────────────────────────────────────────────────────
+prompts:
+  dir: ./prompts
+  reconcile:
+    ja: reconciliation_ja.txt
+    vi: reconciliation_vi.txt
+  table_merge: table_merge.txt
+  coordinator_triage: coordinator_triage.txt
+  textual_agent: textual_agent.txt
+  visual_agent: visual_agent.txt
+  cross_verification: cross_verification.txt
+  synthesis: synthesis.txt
+  subquery_generation: subquery_generation.txt
+  system_message:
+    ja: "あなたは日本語の公文書を理解する専門エージェントです。"
+    vi: "Bạn là một tác nhân chuyên hiểu tài liệu công vụ tiếng Việt."
+
+# ── 7. OUTPUT ────────────────────────────────────────────────────────────────
+output:
+  run_dir: runs/${oc.env:SLURM_JOB_ID,manual}
+  results_json: ${output.run_dir}/results.json
+  submission_csv: ${output.run_dir}/submission.csv
+
+  submission:
+    columns: [id, answer, evidence_page_number]
+    page_index_base: 1
+    fallback_answer: ""
+    fallback_evidence: [1]
+    preserve_order: true
+    list_repr: python_single_quote
+
+  save_full_results: true
+  results_include:
+    - retrieval_scores
+    - agent_claims
+    - verification_status
+    - reeval_rounds
+    - timings
+    - token_usage
+
+# ── 8. BUDGET ────────────────────────────────────────────────────────────────
+budget:
+  total_inference_seconds: 7200
+  preprocess_seconds: 1500
+  reserve_seconds: 300
+  fast_path_threshold_s: 120
+
+# ── 9. LANGUAGE DETECTION ────────────────────────────────────────────────────
+language:
+  source: metadata_or_detect
+  detector: langid
+  default: ja
+
+# ── 10. LOGGING ──────────────────────────────────────────────────────────────
+logging:
+  level: INFO
+  log_file: ${output.run_dir}/pipeline.log
+  log_llm_calls: true
+  log_retrieval_top_n: 5
+  progress_bar: true
+
+# ── 11. REPRODUCIBILITY ──────────────────────────────────────────────────────
+seed: 42
+deterministic: true
+
+# ── 12. ABLATION ─────────────────────────────────────────────────────────────
+ablation:
+  disable_vlm_reconciliation: false
+  disable_cross_page_table: false
+  disable_visual_retrieval: false
+  disable_sparse_retrieval: false
+  disable_dynamic_pruning: false
+  disable_coordinator_agent: false
+  disable_text_agent: false
+  disable_image_agent: false
+  disable_cross_modal_verification: false

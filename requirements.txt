@@ -1,0 +1,51 @@
+# Core
+omegaconf>=2.3.0
+numpy>=1.26.0
+pandas>=2.0.0
+tqdm>=4.66.0
+Pillow>=10.0.0
+
+# PDF processing
+PyMuPDF>=1.23.0
+pypdf>=3.0.0
+
+# ML / Torch
+torch>=2.3.0
+torchvision>=0.18.0
+transformers>=4.45.0
+sentence-transformers>=3.0.0
+accelerate>=0.30.0
+
+# vLLM + OpenAI client
+vllm>=0.6.0
+openai>=1.35.0
+
+# ColQwen visual retrieval
+colpali-engine>=0.3.0
+
+# Retrieval
+rank-bm25>=0.2.2
+faiss-cpu>=1.7.4
+
+# Language detection
+langid>=1.1.6
+
+# Vietnamese tokenizer
+pyvi>=0.1.1
+
+# Japanese tokenizer (optional — install MeCab system library separately)
+# mecab-python3>=1.0.6
+
+# Optional: Vietnamese NLP (heavier)
+# underthesea>=6.8.0
+
+# Optional: MinerU layout analysis
+# magic-pdf>=0.8.0
+
+# Testing
+pytest>=8.0.0
+pytest-timeout>=2.3.0
+
+# Utilities
+httpx>=0.27.0
+requests>=2.31.0

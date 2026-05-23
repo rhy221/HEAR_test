@@ -1,0 +1,15 @@
+You are analyzing whether a table continues across page boundaries in a document.
+
+Previous page table (last table on previous page):
+{prev_table}
+
+Next page content (beginning of next page):
+{next_content}
+
+Determine if the content at the start of the next page is a continuation of the table on the previous page (i.e., the same table spans across pages with rows continuing without a header).
+
+Answer with one of:
+- "YES - merge" if the next page content continues the same table
+- "NO - separate" if they are different tables or unrelated content
+
+Only output your answer, no explanation.

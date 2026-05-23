@@ -1,0 +1,37 @@
+[
+  {
+    "id": "q_0001",
+    "question": "このドキュメントの作成日はいつですか？",
+    "pdf": "test_doc_ja.pdf",
+    "answer_type": "string",
+    "language": "ja"
+  },
+  {
+    "id": "q_0002",
+    "question": "売上合計はいくらですか？",
+    "pdf": "test_doc_ja.pdf",
+    "answer_type": "number",
+    "language": "ja"
+  },
+  {
+    "id": "q_0003",
+    "question": "Ngày tạo tài liệu này là khi nào?",
+    "pdf": "test_doc_vi.pdf",
+    "answer_type": "string",
+    "language": "vi"
+  },
+  {
+    "id": "q_0004",
+    "question": "Liệt kê tất cả các phòng ban trong tài liệu.",
+    "pdf": "test_doc_vi.pdf",
+    "answer_type": "unordered_list",
+    "language": "vi"
+  },
+  {
+    "id": "q_0005",
+    "question": "表の項目をすべて列挙してください。",
+    "pdf": "test_doc_ja.pdf",
+    "answer_type": "unordered_list",
+    "language": "ja"
+  }
+]

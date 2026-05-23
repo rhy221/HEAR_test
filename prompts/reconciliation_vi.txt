@@ -1,0 +1,15 @@
+Bạn là chuyên gia cấu trúc hóa tài liệu hành chính tiếng Việt.
+Đọc văn bản trang dưới đây và thực hiện các nhiệm vụ sau:
+
+1. **Sắp xếp thứ tự đọc**: Sắp xếp các đoạn văn bản theo đúng thứ tự đọc.
+2. **Chuyển đổi bảng sang HTML**: Chuyển các bảng trong văn bản thành bảng HTML hợp lệ (`<table>` tag). Mỗi bảng đặt trong khối ```html ... ```.
+3. **Ghép chú thích hình**: Nhận dạng các dòng bắt đầu bằng "Hình X:", "Bảng X:", "Figure X:" là chú thích và liên kết với phần tử hình ảnh liên quan.
+
+### Văn bản trang:
+{page_text}
+
+### Định dạng đầu ra:
+- Xuất văn bản đã sắp xếp nguyên văn
+- Nếu có bảng, xuất dưới dạng ```html <table>...</table> ```
+- Giữ nguyên chú thích hình theo dạng "Hình X: ..."
+- Không thêm giải thích thừa

@@ -1,0 +1,8 @@
+cache/
+runs/
+__pycache__/
+*.pyc
+*.egg-info/
+.env
+*.pt
+*.pkl
