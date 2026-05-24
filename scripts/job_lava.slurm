@@ -110,6 +110,30 @@ else
     ls -lh "$MODEL_DIR"/*.safetensors 2>/dev/null | tail -3 || true
 fi
 
+# ── 8b. DOWNLOAD COLQWEN MODEL (nếu chưa có) ───────────────────────────────────
+if [ ! -d "$COLQWEN_DIR" ] || [ -z "$(ls -A $COLQWEN_DIR 2>/dev/null)" ]; then
+    echo "ColQwen model not found. Downloading vidore/colqwen2.5-v0.2 ..."
+    mkdir -p "$COLQWEN_DIR"
+    "$HF_CLI" download vidore/colqwen2.5-v0.2 \
+        --local-dir "$COLQWEN_DIR"
+    echo "ColQwen download complete."
+    ls -lh "$COLQWEN_DIR"/*.safetensors 2>/dev/null | tail -3 || echo "(no safetensors found)"
+else
+    echo "ColQwen model already exists at $COLQWEN_DIR — skipping download."
+fi
+
+# ── 8c. DOWNLOAD DENSE MODEL (nếu chưa có) ─────────────────────────────────────
+if [ ! -d "$DENSE_DIR" ] || [ -z "$(ls -A $DENSE_DIR 2>/dev/null)" ]; then
+    echo "Dense retriever model not found. Downloading Alibaba-NLP/gte-multilingual-base ..."
+    mkdir -p "$DENSE_DIR"
+    "$HF_CLI" download Alibaba-NLP/gte-multilingual-base \
+        --local-dir "$DENSE_DIR"
+    echo "Dense model download complete."
+    ls -lh "$DENSE_DIR"/*.safetensors 2>/dev/null | head -3 || echo "(no safetensors found)"
+else
+    echo "Dense model already exists at $DENSE_DIR — skipping download."
+fi
+
 # ── 9. PHASE 1: PREPROCESSING (ColQwen only, Qwen-VL chưa start) ─────────────
 # ColQwen (~7 GiB) loads alone — plenty of room, no OOM risk.
 # Encodes: page images → cache/visual/*.pt
@@ -118,19 +142,9 @@ fi
 # --clear-cache wipes all cache dirs before Phase 1 → accurate end-to-end timing.
 OVERRIDES="${OVERRIDES:-}"
 
-if [ ! -d "$COLQWEN_DIR" ]; then
-    echo "WARNING: ColQwen model not found at $COLQWEN_DIR — visual retrieval disabled"
-    COLQWEN_OVERRIDE="retriever.visual.enabled=false"
-else
-    COLQWEN_OVERRIDE="retriever.visual.enabled=true retriever.visual.retriever_model=$COLQWEN_DIR"
-fi
-
-if [ ! -d "$DENSE_DIR" ]; then
-    echo "WARNING: Dense model not found at $DENSE_DIR — using HF hub"
-    DENSE_OVERRIDE=""
-else
-    DENSE_OVERRIDE="retriever.dense.model=$DENSE_DIR"
-fi
+# All models are now downloaded/available, pass them to config
+COLQWEN_OVERRIDE="retriever.visual.enabled=true retriever.visual.retriever_model=$COLQWEN_DIR"
+DENSE_OVERRIDE="retriever.dense.model=$DENSE_DIR"
 
 PREPROCESS_OVERRIDES="model.qwen_vl.path=$MODEL_DIR \
     $COLQWEN_OVERRIDE \

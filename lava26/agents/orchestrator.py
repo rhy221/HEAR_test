@@ -146,14 +146,14 @@ class Orchestrator:
         # Build context for agents
         def build_context(page_indices):
             text_evidence = "\n\n".join(
-                f"[Page {pages[i].page_num_1}]\n" + "\n".join(pages[i].text_chunks)
+                f"[Page {pages[i].page_num_1}]\n{pages[i].text}"
                 for i in page_indices if i < len(pages)
             )
             image_paths = [
                 pages[i].image_path for i in page_indices if i < len(pages)
             ]
             pages_summary = "\n".join(
-                f"Page {pages[i].page_num_1}: {pages[i].raw_text[:200]}"
+                f"Page {pages[i].page_num_1}: {pages[i].text[:200]}"
                 for i in page_indices if i < len(pages)
             )
             return {

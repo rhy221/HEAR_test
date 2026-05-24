@@ -21,8 +21,21 @@ class DenseRetriever:
         if self._model is not None:
             return
         from sentence_transformers import SentenceTransformer
-        logger.info("Loading dense retriever: %s", self.model_name)
-        self._model = SentenceTransformer(self.model_name, device=self.device)
+
+        model_to_load = self.model_name
+        # If model_name is a local path and doesn't exist, use HuggingFace fallback
+        if Path(self.model_name).exists() or "/" not in self.model_name:
+            # It's a local path or HuggingFace model ID
+            if Path(self.model_name).is_dir() and not Path(self.model_name).exists():
+                logger.warning("Local model path not found: %s. Using HuggingFace fallback.", self.model_name)
+                model_to_load = "Alibaba-NLP/gte-multilingual-base"
+
+        logger.info("Loading dense retriever: %s", model_to_load)
+        try:
+            self._model = SentenceTransformer(model_to_load, device=self.device)
+        except FileNotFoundError:
+            logger.warning("Failed to load model: %s. Falling back to HuggingFace.", model_to_load)
+            self._model = SentenceTransformer("Alibaba-NLP/gte-multilingual-base", device=self.device)
 
     def encode_texts(self, texts: List[str]) -> torch.Tensor:
         self._load_model()
