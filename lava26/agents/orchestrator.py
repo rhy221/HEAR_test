@@ -18,6 +18,7 @@ class QuestionResult:
         self.verification_status: str = UNCERTAIN
         self.agent_claims: Dict = {}
         self.reeval_rounds: int = 0
+        self.raw_model_output: str = ""
         self.error: Optional[str] = None
 
 
@@ -34,7 +35,8 @@ def _synthesize_answer(
     lang: str,
     llm_client: Any,
     cfg: Any,
-) -> str:
+) -> tuple:
+    """Returns (answer, raw_model_output)."""
     prompt_template = _load_prompt(cfg.prompts.dir, cfg.prompts.synthesis)
 
     branch = (
@@ -69,10 +71,10 @@ def _synthesize_answer(
             max_tokens=agent_cfg.max_tokens,
             temperature=agent_cfg.temperature,
         )
-        return _extract_final_answer(result.content)
+        return _extract_final_answer(result.content), result.content
     except Exception as e:
         logger.warning("Synthesis failed: %s", e)
-        return text_result.claim or visual_result.claim or ""
+        return text_result.claim or visual_result.claim or "", ""
 
 
 def _extract_final_answer(content: str) -> str:
@@ -200,7 +202,7 @@ class Orchestrator:
                 logger.info("Re-evaluation round completed for question: %s", question_meta.get("id"))
 
         # Step 3: Synthesis
-        answer = _synthesize_answer(
+        answer, raw_model_output = _synthesize_answer(
             text_result, visual_result, verification.status,
             question, lang, self._vlm_client, self.cfg
         )
@@ -212,6 +214,7 @@ class Orchestrator:
         qr.answer = answer
         qr.evidence_pages = evidence_0idx
         qr.verification_status = verification.status
+        qr.raw_model_output = raw_model_output
         qr.agent_claims = {
             "coordinator": coord_result.claim,
             "textual": text_result.claim,

@@ -52,11 +52,13 @@ def dump_submission_csv(
                 "evidence_page_number": _format_evidence_list(fallback_evidence),
             })
         else:
-            rows.append({
-                "id": qid,
-                "answer": r.get("answer", fallback_answer),
-                "evidence_page_number": r.get("evidence_page_number", _format_evidence_list(fallback_evidence)),
-            })
+            answer = r.get("predicted_answer", r.get("answer", fallback_answer))
+            predicted_pages = r.get("predicted_pages")
+            if predicted_pages is not None and isinstance(predicted_pages, list):
+                evidence_str = _format_evidence_list(predicted_pages)
+            else:
+                evidence_str = r.get("evidence_page_number", _format_evidence_list(fallback_evidence))
+            rows.append({"id": qid, "answer": answer, "evidence_page_number": evidence_str})
 
     with open(output_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=["id", "answer", "evidence_page_number"])
@@ -67,14 +69,20 @@ def dump_submission_csv(
     return output_path
 
 
-def dump_results_json(results: Dict[str, dict], cfg: Any) -> Path:
+def dump_results_json(
+    results: Dict[str, dict],
+    questions_order: List[dict],
+    cfg: Any,
+) -> Path:
     output_path = Path(str(cfg.output.results_json))
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(results, f, ensure_ascii=False, indent=2, default=str)
+    rows = [results[q["id"]] for q in questions_order if q["id"] in results]
 
-    logger.info("Wrote results JSON: %s", output_path)
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(rows, f, ensure_ascii=False, indent=2, default=str)
+
+    logger.info("Wrote results JSON: %s (%d entries)", output_path, len(rows))
     return output_path
 
 

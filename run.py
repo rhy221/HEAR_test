@@ -220,6 +220,7 @@ def run_inference(cfg, logger, result_store=None):
     orchestrator = Orchestrator(cfg, llm_factory)
 
     fast_path_threshold = cfg.budget.fast_path_threshold_s
+    _LOW_CONTENT_CHARS = 50
 
     from tqdm import tqdm
     for q in tqdm(questions, desc="Processing questions"):
@@ -235,6 +236,7 @@ def run_inference(cfg, logger, result_store=None):
         use_fast_path = budget.is_fast_path(fast_path_threshold)
 
         try:
+            t_start = time.time()
             with budget.question_timer(cfg.agents.per_question_timeout_s):
                 # Load pages from cache
                 doc_id = Path(q["pdf_filename"]).stem
@@ -304,20 +306,24 @@ def run_inference(cfg, logger, result_store=None):
                 # Format output
                 answer_type = detect_answer_type(q, q["question"])
                 formatted_answer = format_answer(qr.answer, answer_type)
-                formatted_evidence = format_evidence(qr.evidence_pages)
 
                 result = {
                     "id": qid,
-                    "answer": formatted_answer,
-                    "evidence_page_number": formatted_evidence,
-                    "answer_type": answer_type,
-                    "verification_status": qr.verification_status,
-                    "agent_claims": qr.agent_claims,
-                    "reeval_rounds": qr.reeval_rounds,
-                    "retrieval_scores": list(zip(
-                        [pages[i].page_num_1 if i < len(pages) else i + 1 for i in retrieved_page_indices],
-                        [round(s, 4) for s in retrieval_scores],
-                    )),
+                    "file_id": Path(q["pdf_filename"]).stem,
+                    "question": q["question"],
+                    "answer_format": answer_type,
+                    "language": q.get("_lang", q.get("language", "")),
+                    "num_pages": len(pages),
+                    "num_low_content": sum(
+                        1 for p in pages if len(p.text.strip()) < _LOW_CONTENT_CHARS
+                    ),
+                    "retrieved_pages": [
+                        pages[i].page_num_1 for i in retrieved_page_indices if i < len(pages)
+                    ],
+                    "predicted_answer": formatted_answer,
+                    "predicted_pages": sorted(set(p + 1 for p in qr.evidence_pages)),
+                    "raw_model_output": qr.raw_model_output,
+                    "time_seconds": round(time.time() - t_start, 2),
                 }
                 result_store.store(qid, result)
 
@@ -332,7 +338,7 @@ def run_inference(cfg, logger, result_store=None):
 
     # Write output
     all_results = result_store.all_results()
-    dump_results_json(all_results, cfg)
+    dump_results_json(all_results, questions, cfg)
     csv_path = dump_submission_csv(all_results, questions, cfg)
 
     budget.print_summary()
@@ -389,10 +395,10 @@ def main():
         logger.warning("Signal received — writing partial submission CSV")
         try:
             from lava26.data.loader import load_questions, apply_sample_limit
-            questions = load_questions(cfg.data.test_questions, cfg.data.fields)
-            questions = apply_sample_limit(questions, cfg.data.sample)
-            dump_submission_csv(result_store.all_results(), questions, cfg)
-            dump_results_json(result_store.all_results(), cfg)
+            qs = load_questions(cfg.data.test_questions, cfg.data.fields)
+            qs = apply_sample_limit(qs, cfg.data.sample)
+            dump_submission_csv(result_store.all_results(), qs, cfg)
+            dump_results_json(result_store.all_results(), qs, cfg)
         except Exception as e:
             logger.error("Emergency dump failed: %s", e)
         sys.exit(0)
