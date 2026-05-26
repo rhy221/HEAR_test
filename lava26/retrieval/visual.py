@@ -57,11 +57,25 @@ class VisualRetriever:
                 all_embs.append(embs.cpu())
             except Exception as e:
                 logger.warning("ColQwen batch encoding failed: %s", e)
-                all_embs.append(torch.zeros(len(batch), 128, dtype=torch.float32))
+                # 3D placeholder so padding logic below handles it uniformly
+                all_embs.append(torch.zeros(len(batch), 1, 128, dtype=torch.float32))
 
         if not all_embs:
             return None
-        page_embs = torch.cat(all_embs, dim=0)
+
+        # ColQwen produces [batch, n_patches, dim] where n_patches varies by
+        # image resolution.  Pad shorter batches to the max patch count so
+        # torch.cat(dim=0) succeeds.  Zero-padded positions score 0 in MaxSim
+        # and do not affect retrieval results.
+        max_seq = max(e.shape[1] if e.dim() == 3 else 1 for e in all_embs)
+        padded = []
+        for e in all_embs:
+            if e.dim() == 2:
+                e = e.unsqueeze(1)
+            if e.shape[1] < max_seq:
+                e = torch.nn.functional.pad(e, (0, 0, 0, max_seq - e.shape[1]))
+            padded.append(e)
+        page_embs = torch.cat(padded, dim=0)
         torch.save(page_embs, cache_path)
         logger.debug("Saved visual embeddings for %s (%d pages)", doc_id, len(valid_images))
         return page_embs

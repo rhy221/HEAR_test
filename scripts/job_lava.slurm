@@ -93,6 +93,12 @@ cd "$PROJECT_DIR"
 export PYTHONPATH="$PROJECT_DIR:${PYTHONPATH:-}"
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
+# Prepend PyTorch's bundled libs (libnccl.so.2, libcuda stubs, etc.) so that
+# libtorch_cuda.so resolves ncclDevCommDestroy from the version it was compiled
+# against, not from a mismatched system NCCL.
+TORCH_LIB_DIR="$("$PYTHON" -c 'import torch, os; print(os.path.join(os.path.dirname(torch.__file__), "lib"))')"
+export LD_LIBRARY_PATH="${TORCH_LIB_DIR}:${LD_LIBRARY_PATH:-}"
+
 "$PYTHON" -u -c 'import torch; print("PyTorch:", torch.__version__); print("CUDA:", torch.cuda.is_available()); print("GPU:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else "N/A")'
 
 # ── 8. DOWNLOAD MODEL (nếu chưa có) ──────────────────────────────────────────
