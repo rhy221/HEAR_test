@@ -36,6 +36,7 @@ class DenseRetriever:
         except FileNotFoundError:
             logger.warning("Failed to load model: %s. Falling back to HuggingFace.", model_to_load)
             self._model = SentenceTransformer("Alibaba-NLP/gte-multilingual-base", device=self.device, trust_remote_code=True)
+        self._model.max_seq_length = self.max_length
 
     def encode_texts(self, texts: List[str]) -> torch.Tensor:
         self._load_model()
