@@ -37,9 +37,19 @@ class DenseRetriever:
             logger.warning("Failed to load model: %s. Falling back to HuggingFace.", model_to_load)
             self._model = SentenceTransformer("Alibaba-NLP/gte-multilingual-base", device=self.device, trust_remote_code=True)
         self._model.max_seq_length = self.max_length
+        # Force tokenizer truncation directly — GTE's custom new-impl tokenizer
+        # ignores ST's max_seq_length setter and has no model_max_length set,
+        # causing position_ids to exceed max_position_embeddings on long pages.
+        tok = getattr(self._model, "tokenizer", None)
+        if tok is not None:
+            tok.model_max_length = self.max_length
 
     def encode_texts(self, texts: List[str]) -> torch.Tensor:
         self._load_model()
+        # Pre-truncate by characters as a hard safety net.
+        # GTE uses ~2–4 chars/token for multilingual text; multiply by 2 to be safe.
+        max_chars = self.max_length * 2
+        texts = [t[:max_chars] if len(t) > max_chars else t for t in texts]
         embeddings = self._model.encode(
             texts,
             batch_size=self.batch_size,
