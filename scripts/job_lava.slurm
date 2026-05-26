@@ -163,11 +163,16 @@ echo "============================================================"
 echo "Phase 1 done."
 
 # ── 10. KHỞI ĐỘNG vLLM SERVER (sau khi preprocessing xong) ──────────────────
-# ColQwen unloaded after Phase 1 — Qwen2.5-VL-32B-AWQ can use ~0.85 × 40GB.
+# ColQwen unloaded after Phase 1 — Qwen2.5-VL-32B-AWQ can use ~0.85 × 80GB.
 # --enforce-eager disables CUDA graph capture to avoid memory spikes.
 # awq_marlin quantization: ~20GB VRAM, leaving headroom for KV cache.
 echo "Starting vLLM server (Qwen2.5-VL-32B-Instruct-AWQ)..."
 mkdir -p "$RUN_DIR"
+
+# Brief pause to let Phase 1 Python processes fully exit and release GPU contexts.
+sleep 5
+echo "GPU memory before vLLM start:"
+nvidia-smi --query-gpu=memory.free,memory.total --format=csv,noheader,nounits -i "$CUDA_VISIBLE_DEVICES" 2>/dev/null || nvidia-smi --query-gpu=memory.free,memory.total --format=csv,noheader,nounits | head -1
 
 # Kill any stale process holding the port before starting fresh
 STALE_PID=$(lsof -ti tcp:$VLLM_PORT 2>/dev/null || true)

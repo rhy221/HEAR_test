@@ -30,53 +30,51 @@ class DenseRetriever:
                 logger.warning("Local model path not found: %s. Using HuggingFace fallback.", self.model_name)
                 model_to_load = "Alibaba-NLP/gte-multilingual-base"
 
-        logger.info("Loading dense retriever: %s", model_to_load)
+        logger.info("Loading dense retriever on CPU: %s", model_to_load)
         try:
-            self._model = SentenceTransformer(model_to_load, device=self.device, trust_remote_code=True)
+            # Force CPU: GTE new-impl triggers a non-recoverable CUDA device-side assert
+            # (word_embeddings index OOB) on any GPU regardless of sequence length.
+            # CPU avoids this entirely; GTE is not the throughput bottleneck.
+            self._model = SentenceTransformer(model_to_load, device="cpu", trust_remote_code=True)
         except FileNotFoundError:
             logger.warning("Failed to load model: %s. Falling back to HuggingFace.", model_to_load)
-            self._model = SentenceTransformer("Alibaba-NLP/gte-multilingual-base", device=self.device, trust_remote_code=True)
+            self._model = SentenceTransformer("Alibaba-NLP/gte-multilingual-base", device="cpu", trust_remote_code=True)
         self._model.max_seq_length = self.max_length
 
     def encode_texts(self, texts: List[str]) -> torch.Tensor:
         self._load_model()
-        # Bypass SentenceTransformer.encode() entirely: GTE's custom new-impl
-        # tokenizer ignores ST's max_seq_length setter (no model_max_length set),
-        # causing position_ids to exceed max_position_embeddings on long pages.
-        # Calling tokenizer + model directly guarantees truncation=True is applied.
+        # Bypass SentenceTransformer.encode() to control tokenization directly.
         transformer_mod = self._model._first_module()
         tokenizer = transformer_mod.tokenizer
         auto_model = transformer_mod.auto_model
-        device = next(auto_model.parameters()).device
+
+        # GTE runs on CPU; cap max_length for reasonable CPU throughput.
+        effective_max_length = min(self.max_length, 1024)
 
         all_embeddings: List[torch.Tensor] = []
         for i in range(0, len(texts), self.batch_size):
             batch = texts[i : i + self.batch_size]
             encoded = tokenizer(
                 batch,
-                max_length=self.max_length,
+                max_length=effective_max_length,
                 truncation=True,
                 padding=True,
                 return_tensors="pt",
             )
             # Only pass keys the model accepts; GTE builds token_type_ids internally.
             model_input = {
-                k: v.to(device)
+                k: v
                 for k, v in encoded.items()
                 if k in ("input_ids", "attention_mask")
             }
             with torch.no_grad():
-                output = auto_model(**model_input)
-            hidden = (
-                output.last_hidden_state
-                if hasattr(output, "last_hidden_state")
-                else output[0]
-            )
+                output = auto_model(**model_input, return_dict=True)
+            hidden = output.last_hidden_state
             mask = model_input["attention_mask"].unsqueeze(-1).float()
             emb = (hidden * mask).sum(1) / mask.sum(1).clamp(min=1e-9)
             if self.normalize:
                 emb = torch.nn.functional.normalize(emb, p=2, dim=1)
-            all_embeddings.append(emb.cpu())
+            all_embeddings.append(emb)
 
         return torch.cat(all_embeddings, dim=0)
 
