@@ -48,8 +48,11 @@ class DenseRetriever:
         tokenizer = transformer_mod.tokenizer
         auto_model = transformer_mod.auto_model
 
-        # GTE runs on CPU; cap max_length for reasonable CPU throughput.
-        effective_max_length = min(self.max_length, 1024)
+        # GTE new-impl builds its RoPE cache for max_position_embeddings positions
+        # (observed to be 1024 from the local model weights).  Keep strictly below
+        # that so 0-indexed position_ids [0..seq_len-1] never reach index 1024.
+        # Also capping here keeps CPU inference fast.
+        effective_max_length = min(self.max_length, 512)
 
         all_embeddings: List[torch.Tensor] = []
         for i in range(0, len(texts), self.batch_size):
@@ -61,16 +64,24 @@ class DenseRetriever:
                 padding=True,
                 return_tensors="pt",
             )
-            # Only pass keys the model accepts; GTE builds token_type_ids internally.
-            model_input = {
-                k: v
-                for k, v in encoded.items()
-                if k in ("input_ids", "attention_mask")
-            }
+            input_ids = encoded["input_ids"]
+            attention_mask = encoded["attention_mask"]
+            bs, seq_len = input_ids.shape
+
+            # Pass position_ids explicitly: GTE new-impl creates them internally
+            # via an uninitialized buffer that produces garbage values (e.g.
+            # 2531058312932237344), causing the rope_cos index OOB.
+            position_ids = torch.arange(seq_len, dtype=torch.long).unsqueeze(0).expand(bs, -1)
+
             with torch.no_grad():
-                output = auto_model(**model_input, return_dict=True)
+                output = auto_model(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    position_ids=position_ids,
+                    return_dict=True,
+                )
             hidden = output.last_hidden_state
-            mask = model_input["attention_mask"].unsqueeze(-1).float()
+            mask = attention_mask.unsqueeze(-1).float()
             emb = (hidden * mask).sum(1) / mask.sum(1).clamp(min=1e-9)
             if self.normalize:
                 emb = torch.nn.functional.normalize(emb, p=2, dim=1)
