@@ -37,27 +37,48 @@ class DenseRetriever:
             logger.warning("Failed to load model: %s. Falling back to HuggingFace.", model_to_load)
             self._model = SentenceTransformer("Alibaba-NLP/gte-multilingual-base", device=self.device, trust_remote_code=True)
         self._model.max_seq_length = self.max_length
-        # Force tokenizer truncation directly — GTE's custom new-impl tokenizer
-        # ignores ST's max_seq_length setter and has no model_max_length set,
-        # causing position_ids to exceed max_position_embeddings on long pages.
-        tok = getattr(self._model, "tokenizer", None)
-        if tok is not None:
-            tok.model_max_length = self.max_length
 
     def encode_texts(self, texts: List[str]) -> torch.Tensor:
         self._load_model()
-        # Pre-truncate by characters as a hard safety net.
-        # GTE uses ~2–4 chars/token for multilingual text; multiply by 2 to be safe.
-        max_chars = self.max_length * 2
-        texts = [t[:max_chars] if len(t) > max_chars else t for t in texts]
-        embeddings = self._model.encode(
-            texts,
-            batch_size=self.batch_size,
-            normalize_embeddings=self.normalize,
-            show_progress_bar=False,
-            convert_to_tensor=True,
-        )
-        return embeddings.cpu()
+        # Bypass SentenceTransformer.encode() entirely: GTE's custom new-impl
+        # tokenizer ignores ST's max_seq_length setter (no model_max_length set),
+        # causing position_ids to exceed max_position_embeddings on long pages.
+        # Calling tokenizer + model directly guarantees truncation=True is applied.
+        transformer_mod = self._model._first_module()
+        tokenizer = transformer_mod.tokenizer
+        auto_model = transformer_mod.auto_model
+        device = next(auto_model.parameters()).device
+
+        all_embeddings: List[torch.Tensor] = []
+        for i in range(0, len(texts), self.batch_size):
+            batch = texts[i : i + self.batch_size]
+            encoded = tokenizer(
+                batch,
+                max_length=self.max_length,
+                truncation=True,
+                padding=True,
+                return_tensors="pt",
+            )
+            # Only pass keys the model accepts; GTE builds token_type_ids internally.
+            model_input = {
+                k: v.to(device)
+                for k, v in encoded.items()
+                if k in ("input_ids", "attention_mask")
+            }
+            with torch.no_grad():
+                output = auto_model(**model_input)
+            hidden = (
+                output.last_hidden_state
+                if hasattr(output, "last_hidden_state")
+                else output[0]
+            )
+            mask = model_input["attention_mask"].unsqueeze(-1).float()
+            emb = (hidden * mask).sum(1) / mask.sum(1).clamp(min=1e-9)
+            if self.normalize:
+                emb = torch.nn.functional.normalize(emb, p=2, dim=1)
+            all_embeddings.append(emb.cpu())
+
+        return torch.cat(all_embeddings, dim=0)
 
     def encode_corpus(self, pages: List[Any]) -> torch.Tensor:
         texts = []
