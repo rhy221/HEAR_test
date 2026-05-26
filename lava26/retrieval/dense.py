@@ -32,10 +32,10 @@ class DenseRetriever:
 
         logger.info("Loading dense retriever: %s", model_to_load)
         try:
-            self._model = SentenceTransformer(model_to_load, device=self.device)
+            self._model = SentenceTransformer(model_to_load, device=self.device, trust_remote_code=True)
         except FileNotFoundError:
             logger.warning("Failed to load model: %s. Falling back to HuggingFace.", model_to_load)
-            self._model = SentenceTransformer("Alibaba-NLP/gte-multilingual-base", device=self.device)
+            self._model = SentenceTransformer("Alibaba-NLP/gte-multilingual-base", device=self.device, trust_remote_code=True)
 
     def encode_texts(self, texts: List[str]) -> torch.Tensor:
         self._load_model()

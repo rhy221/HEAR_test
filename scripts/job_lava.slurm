@@ -179,6 +179,7 @@ fi
 
 "$VLLM" serve "$MODEL_DIR" \
     --port $VLLM_PORT \
+    --served-model-name "$(basename $MODEL_DIR)" \
     --quantization awq_marlin \
     --dtype float16 \
     --max-model-len 16384 \
