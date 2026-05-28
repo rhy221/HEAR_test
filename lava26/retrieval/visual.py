@@ -22,6 +22,16 @@ class VisualRetriever:
         if self._model is not None:
             return
         try:
+            # colpali_engine >= 0.4 eagerly imports Gemma3 models which require
+            # transformers >= 4.50. If the installed transformers is older, inject
+            # a stub so the package-level wildcard import completes — we never
+            # instantiate BiGemma3 / ColGemma3, so the stub is never called.
+            import transformers.models.gemma3 as _g3_mod
+            if not hasattr(_g3_mod, "Gemma3Model"):
+                import torch.nn as nn
+                class _Gemma3ModelStub(nn.Module):
+                    pass
+                _g3_mod.Gemma3Model = _Gemma3ModelStub
             from colpali_engine.models import ColQwen2_5, ColQwen2_5_Processor
             logger.info("Loading ColQwen: %s", self.model_name)
             self._model = ColQwen2_5.from_pretrained(

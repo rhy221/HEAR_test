@@ -401,7 +401,10 @@ def main():
             dump_results_json(result_store.all_results(), qs, cfg)
         except Exception as e:
             logger.error("Emergency dump failed: %s", e)
-        sys.exit(0)
+        # Only exit here when triggered by an actual OS signal — direct calls
+        # from the exception handler must return so the caller can exit(1).
+        if signum is not None:
+            sys.exit(0)
 
     signal.signal(signal.SIGTERM, _emergency_dump)
     signal.signal(signal.SIGINT, _emergency_dump)
