@@ -17,7 +17,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=120G
 #SBATCH --gres=mps:a100:1
-#SBATCH --time=02:30:00
+#SBATCH --time=03:00:00
 
 set -euo pipefail
 
@@ -140,12 +140,15 @@ else
     echo "Dense model already exists at $DENSE_DIR — skipping download."
 fi
 
-# ── 9. PHASE 1: PREPROCESSING (ColQwen only, Qwen-VL chưa start) ─────────────
+# ── 9. PHASE 1: PREPROCESSING (PyMuPDF + Dense + ColQwen) ────────────────────
 # ColQwen (~7 GiB) loads alone — plenty of room, no OOM risk.
 # Encodes: page images → cache/visual/*.pt
 #          all queries → cache/query_embs.pt   (MaxSim in Phase 2, no model needed)
 #
-# --clear-cache wipes all cache dirs before Phase 1 → accurate end-to-end timing.
+# MinerU and vlm_reconcile are disabled: MinerU runs ML layout detection per page
+# (~60-190s/PDF) which blows the 2.5h job budget across 200 PDFs.  PyMuPDF-only
+# parsing (~0.5s/PDF) + ColQwen encoding (~5-10s/PDF) fits comfortably.
+# --clear-cache is removed so partial progress is preserved if the job is killed.
 OVERRIDES="${OVERRIDES:-}"
 
 # All models are now downloaded/available, pass them to config
@@ -154,7 +157,9 @@ DENSE_OVERRIDE="retriever.dense.model=$DENSE_DIR"
 
 PREPROCESS_OVERRIDES="model.qwen_vl.path=$MODEL_DIR \
     $COLQWEN_OVERRIDE \
-    $DENSE_OVERRIDE"
+    $DENSE_OVERRIDE \
+    parsing.use_mineru=false \
+    parsing.vlm_reconcile=false"
 
 echo ""
 echo "============================================================"
@@ -164,7 +169,6 @@ echo "============================================================"
     --config config.yaml \
     --output "runs/$SLURM_JOB_ID/results.json" \
     --preprocess \
-    --clear-cache \
     $PREPROCESS_OVERRIDES $OVERRIDES
 echo "Phase 1 done."
 
